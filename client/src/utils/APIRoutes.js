@@ -1,6 +1,6 @@
 import { getAccessToken } from "./configs";
 
-export const host = process.env.API_URL;
+export const host = "https://pr-approval-system-api-sandy.vercel.app";
 export const signupRoute = `${host}/api/signup`;
 export const loginRoute = `${host}/api/login`;
 export const getOrPostPullRequests = `${host}/api/pull-requests`;
