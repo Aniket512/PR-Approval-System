@@ -49,7 +49,6 @@ export const PullRequestDetails = () => {
         headers: getHeaders(),
       })
       .then((res) => {
-        console.log(res?.data);
         setCurrentPR(res?.data);
       })
       .catch((err) => {
@@ -65,7 +64,6 @@ export const PullRequestDetails = () => {
         headers: getHeaders(),
       })
       .then((res) => {
-        console.log(res.data);
         setComments(res?.data?.reviews);
       })
       .catch((err) => {
@@ -85,7 +83,7 @@ export const PullRequestDetails = () => {
         }
       )
       .then((res) => {
-        const updatedPRApprovers = res.data.pullRequest.approvers;
+        const updatedPRApprovers = res?.data?.pullRequest?.approvers;
         setCurrentPR((prev) => ({
           ...prev,
           approvers: updatedPRApprovers,

@@ -32,7 +32,6 @@ const PullRequests = () => {
   }, []);
 
   const handleDelete = (prId) => {
-    console.log(prId);
     axios
       .delete(getOrUpdatePullRequest(prId), {
         headers: getHeaders(),

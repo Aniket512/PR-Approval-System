@@ -44,7 +44,6 @@ const Signup = () => {
     if (handleValidation()) {
       const { email, username, password, roles } = formData;
 
-      console.log(formData);
       axios
         .post(signupRoute, {
           username,
@@ -53,7 +52,6 @@ const Signup = () => {
           roles,
         })
         .then((res) => {
-          console.log(res.data);
           setUserLoggedIn(res?.data);
           navigate("/pull-requests");
         })

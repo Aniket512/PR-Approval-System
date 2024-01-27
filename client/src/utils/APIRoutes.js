@@ -1,6 +1,6 @@
 import { getAccessToken } from "./configs";
 
-export const host = "http://localhost:5000";
+export const host = process.env.API_URL;
 export const signupRoute = `${host}/api/signup`;
 export const loginRoute = `${host}/api/login`;
 export const getOrPostPullRequests = `${host}/api/pull-requests`;

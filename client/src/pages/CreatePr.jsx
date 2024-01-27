@@ -29,7 +29,6 @@ const CreatePr = ({ isOpen, handleClose, setPullRequests }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (handleValidation()) {
-      console.log(formData);
       axios
         .post(getOrPostPullRequests, formData, {
           headers: getHeaders(),
