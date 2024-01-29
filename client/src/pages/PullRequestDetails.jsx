@@ -28,9 +28,13 @@ export const PullRequestDetails = () => {
   }, []);
 
   const checkStatus = () => {
-    const status = currentPr?.approvers?.find(
+    const allApprovers =
+      currentPr?.levels?.flatMap((level) => level.approvers) || [];
+
+    const status = allApprovers.find(
       (app) => app.approverId._id === getUserId()
     )?.status;
+
     return status === "Pending" && currentPr?.status === "Open";
   };
 
@@ -83,10 +87,10 @@ export const PullRequestDetails = () => {
         }
       )
       .then((res) => {
-        const updatedPRApprovers = res?.data?.pullRequest?.approvers;
+        const updatedPRApprovers = res?.data?.pullRequest?.levels;
         setCurrentPR((prev) => ({
           ...prev,
-          approvers: updatedPRApprovers,
+          levels: updatedPRApprovers,
         }));
       })
       .catch((err) => {
@@ -124,11 +128,19 @@ export const PullRequestDetails = () => {
 
       <div>
         <h3>Approvers status</h3>
-        {currentPr?.approvers?.map((approver, i) => (
-          <p key={approver._id}>
-            {i + 1}:{approver.approverId.username} -{" "}
-            <Chip color={getColor(approver.status)} label={approver.status} />
-          </p>
+        {currentPr?.levels?.map((level, levelIndex) => (
+          <div key={levelIndex}>
+            <p>Level {levelIndex + 1}</p>
+            {level.approvers?.map((approver, i) => (
+              <p key={i}>
+                {i + 1}: {approver.approverId.username} -{" "}
+                <Chip
+                  color={getColor(approver.status)}
+                  label={approver.status}
+                />
+              </p>
+            ))}
+          </div>
         ))}
         {getUserRoles().includes("approver") && checkStatus() && (
           <Box display="flex" gap={2}>

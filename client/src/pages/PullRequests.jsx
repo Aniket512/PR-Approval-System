@@ -70,7 +70,7 @@ const PullRequests = () => {
         <thead>
           <tr>
             <th>Title</th>
-            <th>Type</th>
+            {/* <th>Type</th> */}
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -79,7 +79,7 @@ const PullRequests = () => {
           {pullRequests?.map((pr) => (
             <tr key={pr._id}>
               <td>{pr.title}</td>
-              <td>{pr.prType}</td>
+              {/* <td>{pr.prType}</td> */}
               <td>{pr.status}</td>
               <td>
                 <Button

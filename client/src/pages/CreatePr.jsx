@@ -18,13 +18,19 @@ import {
 const initialState = {
   title: "",
   description: "",
-  approvers: [],
-  prType: "Parallel",
+  levels: [],
 };
 
 const CreatePr = ({ isOpen, handleClose, setPullRequests }) => {
-  const [formData, setFormData] = useState(initialState);
-  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    levels: [
+      {
+        approvers: [],
+      },
+    ],
+  });
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -40,28 +46,48 @@ const CreatePr = ({ isOpen, handleClose, setPullRequests }) => {
           console.log(err);
           toast.error(err.response.data.message);
         });
+      setFormData({
+        title: "",
+        description: "",
+        levels: [{ approvers: [] }],
+      });
+      handleClose();
     }
-    setFormData(initialState);
-    handleClose();
   };
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleApproversChange = (e) => {
-    const approversArray = e.target.value
+  const handleApproversChange = (levelIndex, e) => {
+    const updatedLevels = [...formData.levels];
+    updatedLevels[levelIndex].approvers = e.target.value
       .split(",")
       .map((email) => email.trim());
-    setFormData({ ...formData, approvers: approversArray });
+    setFormData({ ...formData, levels: updatedLevels });
+  };
+
+  const handleAddLevel = () => {
+    setFormData({
+      ...formData,
+      levels: [...formData.levels, { approvers: [] }],
+    });
   };
 
   const handleValidation = () => {
-    const { title, description } = formData;
+    const { title, description, levels } = formData;
     if (title === "" || description === "") {
-      toast.error("Title and Description is required.");
+      toast.error("Title and Description are required.");
       return false;
     }
+
+    for (const level of levels) {
+      if (level.approvers.length === 0) {
+        toast.error("Please provide at least one approver email in each level.");
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -101,30 +127,35 @@ const CreatePr = ({ isOpen, handleClose, setPullRequests }) => {
             fullWidth
             sx={{ mt: 2 }}
           />
-          <TextField
-            label="Approvers (comma-separated emails)"
-            type="text"
-            value={formData.approvers}
-            onChange={handleApproversChange}
-            fullWidth
+
+          {formData.levels.map((level, index) => (
+            <div key={index}>
+              <TextField
+                label={`Approvers Level ${index + 1} (comma-separated emails)`}
+                type="text"
+                value={level.approvers}
+                onChange={(e) => handleApproversChange(index, e)}
+                fullWidth
+                sx={{ mt: 2 }}
+              />
+            </div>
+          ))}
+
+          <Button
+            type="button"
+            variant="contained"
+            color="primary"
+            onClick={handleAddLevel}
             sx={{ mt: 2 }}
-          />
-          <FormControl fullWidth sx={{ mt: 2 }}>
-            <InputLabel>PR Type</InputLabel>
-            <Select
-              value={formData.prType}
-              onChange={handleInputChange}
-              name="prType"
-            >
-              <MenuItem value="Parallel">Parallel</MenuItem>
-              <MenuItem value="Sequential">Sequential</MenuItem>
-            </Select>
-          </FormControl>
+          >
+            Add Level
+          </Button>
+
           <Button
             type="submit"
             variant="contained"
             color="primary"
-            sx={{ mt: 2 }}
+            sx={{ mt: 2, display: 'block'}}
           >
             Create PR
           </Button>
@@ -133,5 +164,6 @@ const CreatePr = ({ isOpen, handleClose, setPullRequests }) => {
     </Modal>
   );
 };
+
 
 export default CreatePr;

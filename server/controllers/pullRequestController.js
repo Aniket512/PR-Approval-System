@@ -12,7 +12,7 @@ const getAllPullRequests = async (req, res) => {
     const pullRequests = await PullRequest.find({
       $or: [
         { requesterId: req.user._id },
-        { "approvers.approverId": req.user._id },
+        { "levels.approvers.approverId": req.user._id },
       ],
     });
 
@@ -29,50 +29,71 @@ const getAllPullRequests = async (req, res) => {
 
 const createPullRequest = async (req, res) => {
   try {
-    const { title, description, approvers, prType } = req.body;
+    const { title, description, levels } = req.body;
     const requesterId = req.user._id;
 
-    if (!title || !description || !approvers) {
+    if (!title || !description || !levels) {
       return res.status(400).json({
         message:
           "Missing required fields, insufficient data for creating pullRequest",
       });
     }
 
+    const allApprovers = levels.reduce(
+      (approvers, level) => approvers.concat(level.approvers),
+      []
+    );
+    const uniqueApprovers = new Set(
+      allApprovers.map((approver) => approver.toString())
+    );
+
+    if (uniqueApprovers.size !== allApprovers.length) {
+      return res
+        .status(400)
+        .json({ message: "All approvers must be unique across levels" });
+    }
+
     const approverRoleId = await Role.findOne({ roleName: "approver" }).select(
       "_id"
     );
 
-    const existingApprovers = await User.find({
-      email: { $in: approvers },
-      roles: approverRoleId,
-    });
+    const approverObjects = [];
 
-    if (existingApprovers.length !== approvers.length) {
-      return res.status(400).json({
-        message:
-          "Some users with the given emails do not exist or do not have the 'approver' role",
+    // Iterate through each level and its approvers
+    for (const level of levels) {
+      const existingApprovers = await User.find({
+        email: { $in: level.approvers },
+        roles: approverRoleId,
+      });
+
+      if (existingApprovers.length !== level.approvers.length) {
+        return res.status(400).json({
+          message:
+            "Some users with the given emails do not exist or do not have the 'approver' role",
+        });
+      }
+
+      const levelApprovers = level.approvers
+        .filter((email) => email !== req.user.email)
+        .map((email) => {
+          const matchingApprover = existingApprovers.find(
+            (approver) => approver.email === email
+          );
+          return {
+            approverId: matchingApprover._id,
+          };
+        });
+
+      approverObjects.push({
+        approvers: levelApprovers,
       });
     }
-
-    const approverObjects = approvers
-      .filter((email) => email !== req.user.email)
-      .map((email) => {
-        const matchingApprover = existingApprovers.find(
-          (approver) => approver.email === email
-        );
-
-        return {
-          approverId: matchingApprover._id,
-        };
-      });
 
     const newPullRequest = await PullRequest.create({
       title,
       description,
       requesterId,
-      approvers: approverObjects,
-      prType,
+      levels: approverObjects,
     });
 
     res.status(201).json(newPullRequest);
@@ -93,7 +114,7 @@ const getPullRequest = async (req, res) => {
     const pullRequest = await PullRequest.findById(pullRequestId)
       .populate("requesterId", "username email")
       .populate({
-        path: "approvers.approverId",
+        path: "levels.approvers.approverId",
         select: "username email",
       });
 
@@ -197,14 +218,14 @@ const addComment = async (req, res) => {
       return res.status(404).json({ message: "Pull Request not found" });
     }
 
-    const approver = pullRequest.approvers.find(
-      (approver) => approver.approverId.toString() === userId.toString()
+    const userLevelIndex = pullRequest.levels.findIndex((level) =>
+      level.approvers.some((approver) => approver.approverId.equals(userId))
     );
 
-    if (!approver) {
-      return res.status(403).json({
-        message: "You are not authorized to review this pull request",
-      });
+    if (userLevelIndex === -1) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to review this PR" });
     }
 
     const review = await Review.create({
@@ -229,7 +250,7 @@ const getComments = async (req, res) => {
   try {
     const { pullRequestId } = req.params;
 
-    const pullRequest = await PullRequest.findById(pullRequestId)
+    const pullRequest = await PullRequest.findById(pullRequestId);
 
     if (!pullRequest) {
       return res.status(404).json({ message: "Pull Request not found" });
@@ -264,11 +285,11 @@ const addApproval = async (req, res) => {
     }
 
     // Check if the user is in the list of approvers for the PR
-    const isApprover = pullRequest.approvers.some((approver) =>
-      approver.approverId.equals(userId)
+    const userLevelIndex = pullRequest.levels.findIndex((level) =>
+      level.approvers.some((approver) => approver.approverId.equals(userId))
     );
 
-    if (!isApprover) {
+    if (userLevelIndex === -1) {
       return res
         .status(403)
         .json({ message: "You are not an approver for this PR" });
@@ -281,24 +302,36 @@ const addApproval = async (req, res) => {
         .json({ message: "PR is already approved or rejected" });
     }
 
-    if (pullRequest.prType === "Sequential") {
-      const approverIndex = pullRequest.approvers.findIndex(
-        (approver) => approver.approverId.toString() === userId.toString()
-      );
+    if (userLevelIndex > 0) {
+      const previousLevel = pullRequest.levels[userLevelIndex - 1];
+      const isPreviousLevelApproved = previousLevel.status === APPROVED;
 
-      if (approverIndex !== 0) {
-        const previousApprover = pullRequest.approvers[approverIndex - 1];
-        if (previousApprover.status !== APPROVED) {
-          return res.status(403).json({
-            message:
-              "Please wait for the previous approver to approve the pull request",
-          });
-        }
+      if (!isPreviousLevelApproved) {
+        return res.status(403).json({
+          message:
+            "Please wait for the previous level approvers to approve the pull request",
+        });
       }
     }
 
-    const existingDecision = pullRequest.approvers.find(
-      (approver) => approver.approverId.toString() === userId.toString()
+    // if (pullRequest.prType === "Sequential") {
+    //   const approverIndex = pullRequest.approvers.findIndex(
+    //     (approver) => approver.approverId.toString() === userId.toString()
+    //   );
+
+    //   if (approverIndex !== 0) {
+    //     const previousApprover = pullRequest.approvers[approverIndex - 1];
+    //     if (previousApprover.status !== APPROVED) {
+    //       return res.status(403).json({
+    //         message:
+    //           "Please wait for the previous approver to approve the pull request",
+    //       });
+    //     }
+    //   }
+    // }
+
+    const existingDecision = pullRequest.levels[userLevelIndex].approvers.find(
+      (approver) => approver.approverId.equals(userId)
     );
 
     if (existingDecision && existingDecision.status !== PENDING) {
@@ -308,31 +341,94 @@ const addApproval = async (req, res) => {
     }
 
     const updatedPullRequest = await PullRequest.findOneAndUpdate(
-      { _id: pullRequestId, "approvers.approverId": userId },
-      { $set: { "approvers.$.status": status } },
-      { new: true, runValidators: true }
-    ).populate("approvers.approverId");
+      { _id: pullRequestId },
+      {
+        $set: {
+          "levels.$[level].approvers.$[approver].status": status,
+        },
+      },
+      {
+        arrayFilters: [
+          { "level.approvers.approverId": userId },
+          { "approver.approverId": userId },
+        ],
+        new: true,
+        runValidators: true,
+      }
+    ).populate("levels.approvers.approverId");
 
-    const anyRejected = updatedPullRequest.approvers.some(
-      (approver) => approver.status === REJECTED
+    const anyApprovedInCurrentLevel = updatedPullRequest.levels[
+      userLevelIndex
+    ].approvers.some((approver) => approver.status === APPROVED);
+
+    if (anyApprovedInCurrentLevel) {
+      await PullRequest.findOneAndUpdate(
+        {
+          _id: pullRequestId,
+          "levels._id": updatedPullRequest.levels[userLevelIndex]._id,
+          "levels.status": "Pending",
+        },
+        { $set: { "levels.$.status": APPROVED } }
+      );
+    }
+
+    const allRejectedInCurrentLevel = updatedPullRequest.levels[
+      userLevelIndex
+    ].approvers.every((approver) => approver.status === REJECTED);
+
+    if (allRejectedInCurrentLevel) {
+      await PullRequest.findOneAndUpdate(
+        {
+          _id: pullRequestId,
+          "levels._id": updatedPullRequest.levels[userLevelIndex]._id,
+          "levels.status": "Pending",
+        },
+        { $set: { "levels.$.status": REJECTED } }
+      );
+    }
+
+    const updatedPullRequestAfterStatusUpdate = await PullRequest.findById(
+      pullRequestId
     );
 
-    if (anyRejected) {
-        await PullRequest.findByIdAndUpdate(pullRequestId, {
-          status: REJECTED,
-        });
+    const anyLevelRejected = updatedPullRequestAfterStatusUpdate.levels.some(
+      (level) => level.status === REJECTED
+    );
+
+    if (anyLevelRejected) {
+      await PullRequest.findByIdAndUpdate(pullRequestId, { status: REJECTED });
     }
+
+    const allLevelsApproved = updatedPullRequestAfterStatusUpdate.levels.every(
+      (level) => level.status === "Approved"
+    );
+
+    if (allLevelsApproved) {
+      await PullRequest.findByIdAndUpdate(pullRequestId, { status: APPROVED });
+    }
+
+    res.status(200).json({ pullRequest: updatedPullRequest });
+
+    // const anyRejected = updatedPullRequest.approvers.some(
+    //   (approver) => approver.status === REJECTED
+    // );
+
+    // if (anyRejected) {
+    //     await PullRequest.findByIdAndUpdate(pullRequestId, {
+    //       status: REJECTED,
+    //     });
+    // }
 
     // If all the approvers have approved the pull request, update the pull request's status to approved
-    const allApproved = updatedPullRequest.approvers.every(
-      (approver) => approver.status === APPROVED
-    );
+    // const allApproved = updatedPullRequest.approvers.every(
+    //   (approver) => approver.status === APPROVED
+    // );
 
-    if (allApproved) {
-      await PullRequest.findByIdAndUpdate(pullRequestId, {
-        status: APPROVED,
-      });
-    }
+    // if (allApproved) {
+    //   await PullRequest.findByIdAndUpdate(pullRequestId, {
+    //     status: APPROVED,
+    //   });
+    // }
 
     // If all the approvers have rejected the pull request, update the pull request's status to rejected
     // const allRejected = updatedPullRequest.approvers.every(
@@ -344,8 +440,6 @@ const addApproval = async (req, res) => {
     //     status: REJECTED,
     //   });
     // }
-
-    res.status(200).json({ pullRequest: updatedPullRequest });
   } catch (err) {
     console.error(err);
     return res.status(500).send({

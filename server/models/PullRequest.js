@@ -4,15 +4,24 @@ const pullRequestSchema = new Schema(
   {
     title: { type: String, required: true },
     description: { type: String, required: true },
-    prType: {
-      type: String,
-      enum: ["Parallel", "Sequential"],
-      default: "Parallel",
-    },
+    // prType: {
+    //   type: String,
+    //   enum: ["Parallel", "Sequential"],
+    //   default: "Parallel",
+    // },
     requesterId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    approvers: [
+    levels: [
       {
-        approverId: { type: Schema.Types.ObjectId, ref: "User" },
+        approvers: [
+          {
+            approverId: { type: Schema.Types.ObjectId, ref: "User" },
+            status: {
+              type: String,
+              enum: ["Pending", "Approved", "Rejected"],
+              default: "Pending",
+            },
+          },
+        ],
         status: {
           type: String,
           enum: ["Pending", "Approved", "Rejected"],
