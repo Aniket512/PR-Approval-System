@@ -335,15 +335,15 @@ const addApproval = async (req, res) => {
     }
 
     // If all the approvers have rejected the pull request, update the pull request's status to rejected
-    const allRejected = updatedPullRequest.approvers.every(
-      (approver) => approver.status === REJECTED
-    );
+    // const allRejected = updatedPullRequest.approvers.every(
+    //   (approver) => approver.status === REJECTED
+    // );
 
-    if (allRejected) {
-      await PullRequest.findByIdAndUpdate(pullRequestId, {
-        status: REJECTED,
-      });
-    }
+    // if (allRejected) {
+    //   await PullRequest.findByIdAndUpdate(pullRequestId, {
+    //     status: REJECTED,
+    //   });
+    // }
 
     res.status(200).json({ pullRequest: updatedPullRequest });
   } catch (err) {
