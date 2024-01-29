@@ -313,25 +313,14 @@ const addApproval = async (req, res) => {
       { new: true, runValidators: true }
     ).populate("approvers.approverId");
 
-    const allDecisionsMade = updatedPullRequest.approvers.every(
-      (approver) => approver.status !== PENDING
-    );
-
     const anyRejected = updatedPullRequest.approvers.some(
       (approver) => approver.status === REJECTED
     );
 
-    // If PR type is parallel and all the approvers have made decision and if any of the approver rejects the PR, the PR is rejected.
-
-    if (
-      (updatedPullRequest.prType === "Sequential" || allDecisionsMade) &&
-      anyRejected
-    ) {
-      if (anyRejected) {
+    if (anyRejected) {
         await PullRequest.findByIdAndUpdate(pullRequestId, {
           status: REJECTED,
         });
-      }
     }
 
     // If all the approvers have approved the pull request, update the pull request's status to approved
